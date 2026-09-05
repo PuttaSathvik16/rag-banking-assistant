@@ -1,9 +1,9 @@
 # Retrieval-pipeline configuration. Nothing here should be hardcoded in src/.
 chunking:
-  strategy: "sentence_window"   # not naive fixed-size — see docs/business-case.md#chunking-rationale
-  window_size: 3                # sentences per chunk
-  window_overlap: 1             # sentence overlap between windows
-  min_chunk_chars: 150
+  strategy: "token_window"      # token-aware chunking with tiktoken
+  chunk_size_tokens: 256        # target tokens per chunk
+  overlap_tokens: 32            # token overlap between chunks
+  min_chunk_tokens: 20          # minimum tokens per chunk
 
 embedding:
   model_name: "BAAI/bge-small-en-v1.5"
