@@ -12,3 +12,4 @@ data/chroma_db/*
 dist/
 build/
 ../*
+.env.save
