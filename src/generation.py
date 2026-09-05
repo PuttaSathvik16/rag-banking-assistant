@@ -9,11 +9,12 @@ import json
 import google.generativeai as genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 from pydantic import ValidationError
+from langchain_core.prompts import ChatPromptTemplate
 
 from src.config import load_config, get_api_key
 from src.schemas import AnswerResponse, Citation
 
-SYSTEM_PROMPT = """You are a retail-banking product & policy assistant. Answer ONLY using the
+SYSTEM_MESSAGE = """You are a retail-banking product & policy assistant. Answer ONLY using the
 provided context clauses. Every factual claim must be traceable to a specific clause.
 
 Rules:
@@ -36,13 +37,12 @@ Return ONLY valid JSON matching this shape, no markdown fences:
   "confidence": 0.0-1.0,
   "abstained": true/false,
   "abstention_reason": "..." or null
-}}
+}}"""
 
-Context clauses:
-{context}
-
-Question: {question}
-"""
+PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
+    ("system", SYSTEM_MESSAGE),
+    ("human", "Context clauses:\n{context}\n\nQuestion: {question}")
+])
 
 
 def _format_context(chunks: list) -> str:
@@ -82,10 +82,11 @@ class Generator:
                 abstention_reason="No retrieved context for this query.",
             )
 
-        prompt = SYSTEM_PROMPT.format(context=_format_context(chunks), question=question)
+        prompt_value = PROMPT_TEMPLATE.format_prompt(context=_format_context(chunks), question=question)
+        prompt_str = prompt_value.to_string()
 
         try:
-            raw = self._call_model(prompt)
+            raw = self._call_model(prompt_str)
             cleaned = raw.strip().strip("```json").strip("```").strip()
             parsed = json.loads(cleaned)
             answer = AnswerResponse(**parsed)
