@@ -32,3 +32,26 @@ def test_ac05_generator_abstains_with_empty_context():
     result = gen.generate("Any question", chunks=[])
     assert result.abstained is True
     assert result.confidence == 0.0
+
+
+def test_context_budget_truncates_low_ranked_chunks():
+    """Verify context budget drops lowest-ranked chunks when budget exceeded."""
+    from src.generation import Generator
+    from src.config import load_config
+    try:
+        gen = Generator(load_config())
+    except RuntimeError:
+        pytest.skip("GOOGLE_API_KEY not set in this environment")
+
+    gen.max_context_tokens = 256  # Set tight budget to force truncation
+    mock_chunks = [
+        {"chunk_id": "c1", "doc_id": "doc1", "clause_id": "clause1", "text": "Lorem ipsum " * 50, "rerank_score": 0.9},
+        {"chunk_id": "c2", "doc_id": "doc1", "clause_id": "clause2", "text": "Lorem ipsum " * 50, "rerank_score": 0.7},
+        {"chunk_id": "c3", "doc_id": "doc1", "clause_id": "clause3", "text": "Lorem ipsum " * 50, "rerank_score": 0.5},
+        {"chunk_id": "c4", "doc_id": "doc1", "clause_id": "clause4", "text": "Lorem ipsum " * 50, "rerank_score": 0.3},
+    ]
+
+    truncated = gen._enforce_context_budget(mock_chunks)
+    assert len(truncated) < len(mock_chunks), f"Budget enforcement should drop chunks, got {len(truncated)} of {len(mock_chunks)}"
+    if len(truncated) > 1:
+        assert truncated[0]["rerank_score"] >= truncated[-1]["rerank_score"], "Chunks should be ordered by score"
