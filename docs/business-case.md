@@ -36,12 +36,16 @@ No real customer, account, or card data is used anywhere (Synthetic-Data Rule).
   transactions) are declined with an explanation rather than answered speculatively.
 
 ## Chunking rationale
-Sentence-window chunking (not naive fixed-character chunking) was chosen because clause bodies in
-this domain are short, self-contained statements (a fee amount, an eligibility rule) where cutting
-mid-sentence at an arbitrary character count risks splitting the number from its qualifying
-condition (e.g., separating "$34" from "up to 3 items per day"). Windows of 3 sentences with 1
-sentence of overlap preserve that local context while keeping chunks small enough for precise
-retrieval and citation at the clause level. See `src/ingestion.py::sentence_window_chunks`.
+Token-based windowing (via tiktoken) was chosen to directly optimize for LLM context usage. Clause
+bodies in this domain are short, self-contained statements (a fee amount, an eligibility rule)
+where accurate token measurement is critical: character or sentence counts are rough proxies that
+under- or over-fill the context window depending on vocabulary density and punctuation, whereas
+token count directly reflects what the LLM consumes and what the context budget (max_context_tokens)
+must constrain. Chunks are sized to 256 tokens with 32-token overlap, ensuring that the final
+assembled context respects the 2048-token budget without guessing or trial-and-error. This
+strategy keeps retrieval and citation precise at the clause level while maintaining predictable
+memory and cost characteristics. See `src/ingestion.py::token_window_chunks` and `config.yaml`
+chunking parameters.
 
 ## Success metrics
 - RAGAS context precision/recall, faithfulness, and answer relevancy over the golden set
