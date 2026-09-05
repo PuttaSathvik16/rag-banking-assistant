@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(GOOGLE_API_KEY=\"invalid_key_test\" .venv/bin/python cli.py ask \"test\")",
+      "Bash(timeout 30 .venv/bin/python cli.py ask \"What is the minimum balance for Premium Savings?\")",
+      "Bash(timeout 30 .venv/bin/python cli.py ask \"What is the interest rate on a personal loan for someone with excellent credit?\")",
+      "Bash(.venv/bin/python cli.py ask \"What is the minimum balance for Premium Savings?\")",
+      "Bash(.venv/bin/python -c ' *)"
+    ]
+  }
+}

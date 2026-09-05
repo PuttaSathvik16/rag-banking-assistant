@@ -1,0 +1,18 @@
+{
+  "model_a": {
+    "model": "openai/gpt-oss-120b",
+    "avg_confidence": 0.656,
+    "abstention_rate": 0.348,
+    "avg_citations_per_answer": 0.91,
+    "total_wall_time_seconds": 142.8,
+    "avg_seconds_per_query": 6.21
+  },
+  "model_b": {
+    "model": "openai/gpt-oss-20b",
+    "avg_confidence": 0.676,
+    "abstention_rate": 0.304,
+    "avg_citations_per_answer": 0.87,
+    "total_wall_time_seconds": 97.9,
+    "avg_seconds_per_query": 4.26
+  }
+}
