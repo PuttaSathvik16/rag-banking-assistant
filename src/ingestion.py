@@ -1,14 +1,14 @@
 """
-Ingestion pipeline: parses the clause-tagged markdown corpus, applies a
-sentence-window chunking strategy (not naive fixed-size — see
-docs/business-case.md#chunking-rationale), embeds with a local
-sentence-transformers model, and idempotently upserts into a persisted
+Ingestion pipeline: parses the clause-tagged markdown corpus, applies
+token-aware chunking (using tiktoken for precise token counting), embeds with
+a local sentence-transformers model, and idempotently upserts into a persisted
 Chroma collection with source/clause metadata.
 """
 import os
 import re
 import glob
 import chromadb
+import tiktoken
 from sentence_transformers import SentenceTransformer
 
 from src.config import load_config, REPO_ROOT
@@ -41,27 +41,32 @@ def parse_document(filepath: str):
     return doc_id, doc_type, title, clauses
 
 
-def sentence_window_chunks(clause_text: str, window_size: int, overlap: int, min_chars: int):
+def token_window_chunks(clause_text: str, chunk_size_tokens: int, overlap_tokens: int, min_chunk_tokens: int):
     """
-    Sentence-window chunking: splits clause body into sentences, then groups
-    them into overlapping windows. This preserves local context across
-    sentence boundaries better than a naive fixed-character split, and keeps
-    chunks aligned to clause semantics rather than cutting mid-thought.
+    Token-aware windowing: splits text into overlapping chunks based on actual
+    token count (using tiktoken) rather than sentence or character boundaries.
+    This ensures precise control over context size for the LLM.
     """
-    sentences = re.split(r"(?<=[.!?])\s+", clause_text.strip())
-    sentences = [s for s in sentences if s]
-    if not sentences:
-        return []
+    enc = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(clause_text.strip())
+
+    if len(tokens) <= min_chunk_tokens:
+        return [clause_text.strip()]
 
     chunks = []
-    step = max(window_size - overlap, 1)
-    for start in range(0, len(sentences), step):
-        window = sentences[start:start + window_size]
-        chunk_text = " ".join(window).strip()
-        if len(chunk_text) >= min_chars or start == 0:
+    step = max(chunk_size_tokens - overlap_tokens, 1)
+
+    for start_idx in range(0, len(tokens), step):
+        end_idx = start_idx + chunk_size_tokens
+        chunk_tokens = tokens[start_idx:end_idx]
+
+        if len(chunk_tokens) >= min_chunk_tokens:
+            chunk_text = enc.decode(chunk_tokens)
             chunks.append(chunk_text)
-        if start + window_size >= len(sentences):
+
+        if end_idx >= len(tokens):
             break
+
     return chunks if chunks else [clause_text.strip()]
 
 
@@ -89,8 +94,8 @@ def build_index(config: dict = None, verbose: bool = True):
         doc_id, doc_type, title, clauses = parse_document(filepath)
         source_file = os.path.basename(filepath)
         for clause_id, heading, body in clauses:
-            chunks = sentence_window_chunks(
-                body, chunk_cfg["window_size"], chunk_cfg["window_overlap"], chunk_cfg["min_chunk_chars"]
+            chunks = token_window_chunks(
+                body, chunk_cfg["chunk_size_tokens"], chunk_cfg["overlap_tokens"], chunk_cfg["min_chunk_tokens"]
             )
             for j, chunk_text in enumerate(chunks):
                 chunk_id = f"{clause_id}::chunk{j}"  # deterministic -> idempotent upsert
