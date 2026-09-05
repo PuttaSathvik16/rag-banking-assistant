@@ -6,6 +6,7 @@ AnswerResponse. Abstains rather than fabricating when grounding is weak
 (Grounding & Advice Rule).
 """
 import json
+import tiktoken
 import google.generativeai as genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 from pydantic import ValidationError
@@ -61,6 +62,26 @@ class Generator:
         gen_cfg = self.config["generation"]
         self.model = genai.GenerativeModel(gen_cfg["model"])
         self.threshold = gen_cfg["abstention_confidence_threshold"]
+        self.max_context_tokens = gen_cfg.get("max_context_tokens", 2048)
+        self.enc = tiktoken.get_encoding("cl100k_base")
+
+    def _enforce_context_budget(self, chunks: list) -> list:
+        """Truncate chunks if total token count exceeds budget, dropping lowest-ranked chunks."""
+        if not chunks:
+            return []
+
+        total_tokens = 0
+        formatted_chunks = []
+        for c in chunks:
+            chunk_text = f"[{c['clause_id']}] {c['text']}"
+            chunk_tokens = len(self.enc.encode(chunk_text))
+            if total_tokens + chunk_tokens <= self.max_context_tokens:
+                formatted_chunks.append(c)
+                total_tokens += chunk_tokens
+            else:
+                break
+
+        return formatted_chunks if formatted_chunks else [chunks[0]]
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2))
     def _call_model(self, prompt: str) -> str:
@@ -81,6 +102,8 @@ class Generator:
                 citations=[], confidence=0.0, abstained=True,
                 abstention_reason="No retrieved context for this query.",
             )
+
+        chunks = self._enforce_context_budget(chunks)
 
         prompt_value = PROMPT_TEMPLATE.format_prompt(context=_format_context(chunks), question=question)
         prompt_str = prompt_value.to_string()
